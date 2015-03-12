@@ -1,0 +1,13 @@
+{
+  "service": {
+    "name": "django",
+    "port": 8000,
+    "checks": [
+      {
+        "script": "/usr/local/bin/check-port 8000",
+        "interval": "10s"
+      }
+    ]
+  }
+}
+

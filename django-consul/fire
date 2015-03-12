@@ -1,0 +1,73 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+MONGOD_PORT=30000
+CONFIG_PORT=20000
+MONGOS_PORT=27017
+
+def wait_for_port_listen(host, port, retry=5, interval=2):
+    import socket
+    import time
+    s = socket.socket()
+
+    count = 0
+
+    time.sleep(interval)
+
+    while count < retry:
+        try:
+            s.connect((host, port))
+            print '%s:%s is ready' % (host, port)
+            break
+        except socket.error, e:
+            print '[retry count %s] %s:%s is not listened continue waiting' % (count, host, port)
+            time.sleep(interval)
+            count += 1
+
+    if count == retry:
+        print '%s:%s is unreachable!!' % (host, port)
+
+def exec_cmd(cmds, shell=False):
+    import subprocess
+    ret_code = subprocess.call(cmds, shell=shell)
+    return ret_code
+
+def exec_django(base_dir='./'):
+    import os
+    manage_py = os.path.join(base_dir, 'manage.py')
+    cmds = [r'nohup /root/jason_demo/manage.py runserver 0.0.0.0:8000 &']
+
+    ret_code = exec_cmd(cmds, shell=True)
+
+    if ret_code == 0:
+        print 'django successfully started with %s' % cmds
+    else:
+        print 'django start failed! (%s)' % cmds
+
+def main():
+    import os
+    import sys
+    import argparse
+
+    parser = argparse.ArgumentParser(description='This script is launch django and consul slave')
+
+    parser.add_argument('run_mode', nargs='+',  help='run mode django or consul')
+
+    parser.add_argument('--consul-join', \
+            action='store', \
+            default='consul.service.consul', \
+            metavar='CONFIGHOST:PORT', \
+            help='launch mongo config server')
+
+    args = parser.parse_args()
+    run_mode = args.run_mode
+
+    if 'django' in run_mode:
+        exec_django(base_dir='./jason_demo')
+
+    if 'consul' in run_mode:
+        consul_cmd = ['consul', 'agent', '-data-dir=/tmp/consul', '-join', args.consul_join, '-config-file=/root/django.json']
+        exec_cmd(consul_cmd)
+
+if __name__ == '__main__':
+    main()

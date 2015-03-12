@@ -1,0 +1,14 @@
+{
+  "service": {
+    "name": "mongos",
+    "tags": ["master"],
+    "port": 27017,
+    "checks": [
+      {
+        "script": "/usr/local/bin/check-port 27017",
+        "interval": "10s"
+      }
+    ]
+  }
+}
+

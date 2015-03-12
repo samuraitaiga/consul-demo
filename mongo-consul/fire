@@ -1,0 +1,152 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+MONGOD_PORT=30000
+CONFIG_PORT=20000
+MONGOS_PORT=27017
+
+def wait_for_port_listen(host, port, retry=5, interval=2):
+    import socket
+    import time
+    s = socket.socket()
+
+    count = 0
+
+    time.sleep(interval)
+
+    while count < retry:
+        try:
+            s.connect((host, port))
+            print '%s:%s is ready' % (host, port)
+            break
+        except socket.error, e:
+            print '[retry count %s] %s:%s is not listened continue waiting' % (count, host, port)
+            time.sleep(interval)
+            count += 1
+
+    if count == retry:
+        print '%s:%s is unreachable!!' % (host, port)
+
+def create_dir(dir_path):
+    import os
+    if os.path.exists(dir_path):
+        pass
+    else:
+        os.makedirs(dir_path)
+
+def exec_cmd(cmds):
+    import subprocess
+    ret_code = subprocess.call(cmds)
+    return ret_code
+
+def exec_mongos(log_file, options):
+    import os
+
+    log_dir = os.path.dirname(log_file)
+    create_dir(log_dir)
+
+    common_options = ['--logpath', log_file, '--fork']
+    cmds = ['mongos'] + options + common_options
+
+    ret_code = exec_cmd(cmds)
+
+    if ret_code == 0:
+        print 'mongos successfully started with %s' % cmds
+    else:
+        print 'mongos start failed! (%s)' % cmds
+
+def exec_mongod(data_dir, log_file, options):
+    import os
+
+    log_dir = os.path.dirname(log_file)
+    create_dir(log_dir)
+    create_dir(data_dir)
+
+    common_options = ['--dbpath', data_dir, '--logpath', log_file, '--fork']
+
+    cmds = ['mongod'] + options + common_options
+
+    ret_code = exec_cmd(cmds)
+    
+    if ret_code == 0:
+        print 'mongod successfully started with %s' % cmds
+    else:
+        print 'mongod start failed! (%s)' % cmds
+
+def launch_mongod(base_data_dir, base_log_dir, prefix='mongod', port=MONGOD_PORT):
+    import os
+    data_dir = os.path.join(base_data_dir, prefix)
+    log_file = os.path.join(base_log_dir, '%s.log' % prefix)
+
+    str_port = str(port)
+    uniq_options = ['--shardsvr', '--port', str_port]
+    exec_mongod(data_dir, log_file, uniq_options)
+
+    wait_for_port_listen('localhost', port)
+
+def launch_config(base_data_dir, base_log_dir, prefix='config', port=CONFIG_PORT):
+    import os
+    data_dir = os.path.join(base_data_dir, prefix)
+    log_file = os.path.join(base_log_dir, '%s.log' % prefix)
+
+    str_port = str(port)
+    uniq_options = ['--configsvr', '--port', str_port]
+    exec_mongod(data_dir, log_file, uniq_options)
+
+    wait_for_port_listen('localhost', port)
+
+def launch_mongos(base_log_dir, config, prefix='mongos', port=MONGOS_PORT, chunk_size='64'):
+    import os
+    log_file = os.path.join(base_log_dir, '%s.log' % prefix)
+
+    str_port = str(port)
+    uniq_options = ['--configdb', config, '--port', str_port, '--chunkSize', chunk_size]
+    exec_mongos(log_file, uniq_options)
+
+    wait_for_port_listen('localhost', port)
+    
+def main():
+    import os
+    import sys
+    import argparse
+    if not os.name == 'posix':
+        print 'this script only works in posix system'
+        sys.exit(1)
+    home_dir = os.environ['HOME']
+    base_data_dir = os.path.join(home_dir, '.mongo', 'data')
+    base_log_dir = os.path.join(home_dir, '.mongo', 'log')
+
+    parser = argparse.ArgumentParser(description='This script is launch sharding mongod, mongos and config')
+
+    parser.add_argument('run_mode', nargs='+',  help='run mode mongod, config or mongos')
+
+    parser.add_argument('--config', \
+            action='store', \
+            default='localhost:%s' % CONFIG_PORT, \
+            metavar='CONFIGHOST:PORT', \
+            help='launch mongo config server')
+
+    parser.add_argument('--consul-join', \
+            action='store', \
+            default='consul.service.consul', \
+            metavar='CONFIGHOST:PORT', \
+            help='launch mongo config server')
+
+    args = parser.parse_args()
+    run_mode = args.run_mode
+
+    if 'mongod' in run_mode:
+        ret_code = launch_mongod(base_data_dir, base_log_dir)
+
+    if 'config' in run_mode:
+        ret_code = launch_config(base_data_dir, base_log_dir)
+
+    if 'mongos' in run_mode:
+        ret_code = launch_mongos(base_log_dir, args.config)
+
+    if 'consul' in run_mode:
+        consul_cmd = ['consul', 'agent', '-data-dir=/tmp/consul', '-join', args.consul_join, '-config-file=/root/mongos.json']
+        exec_cmd(consul_cmd)
+
+if __name__ == '__main__':
+    main()

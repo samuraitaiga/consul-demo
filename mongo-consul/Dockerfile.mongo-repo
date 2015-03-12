@@ -1,0 +1,10 @@
+FROM samuraitaiga/centos-consul
+MAINTAINER samuraitaiga
+
+WORKDIR /root
+
+ADD mongodb-org-3.0.repo /etc/yum.repos.d/
+RUN yum install -y mongodb-org
+
+ADD fire-mongo /usr/local/bin/
+RUN yum install python && chmod +x /usr/local/bin/fire-mongo

@@ -1,0 +1,6 @@
+#!/bin/bash
+
+PORT=$1
+HOST=127.0.0.1
+
+nmap -Pn -p $PORT $HOST | awk "\$1 ~ /$PORT/ {print \$2}" | grep open
