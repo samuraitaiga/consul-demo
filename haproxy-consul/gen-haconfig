@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+HACONFIG = '/etc/haproxy/haproxy.cfg'
+DJANGO_MEMBER_URL='http://consul.service.consul:8500/v1/catalog/service/django'
+
+def get_hosts():
+    import urllib3
+    import json
+
+    http = urllib3.PoolManager()
+    hosts = []
+    res = http.urlopen('GET', DJANGO_MEMBER_URL)
+
+    if res.status == 200:
+        json_objs = json.loads(res.data)
+
+        for json_obj in json_objs:
+            json_obj
+
+            hosts.append(json_obj['Address'])
+    return hosts    
+
+def gen_haconfig(proxy_hosts):
+    from jinja2 import Environment, FileSystemLoader
+    env = Environment(loader=FileSystemLoader('/root'))
+    template = env.get_template('haproxy.cfg.j2')
+    if len(proxy_hosts) == 0:
+        pass
+    else:
+        haconfig_content = template.render({'proxy_hosts' : proxy_hosts})
+        with open(HACONFIG, 'w') as fp:
+            fp.write(haconfig_content)
+        
+
+def main():
+    django_hosts = []
+    django_hosts = get_hosts()
+    gen_haconfig(django_hosts)
+
+if __name__ == '__main__':
+    main()
